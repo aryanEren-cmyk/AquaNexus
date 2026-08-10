@@ -15,7 +15,10 @@ Purpose: Chat interface where user asks natural-language questions about ocean d
 
 ## Backend API contract
 POST /chat
-  Request:  { "message": string, "session_id": string }
+  Request:  { "message": string }
   Response: { "text": string, "chart_data": object | null, "map_data": object | null }
 
-Base URL: http://localhost:8000 (update to deployed Render/Railway URL before demo)
+Base URL: http://localhost:8000
+
+Production:
+Use the deployed Render backend URL.
