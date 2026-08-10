@@ -13,7 +13,7 @@ Core tables: floats, profiles, measurements, parameters
 
 ## Main endpoint
 POST /chat
-  Request:  { "message": string }
+  Request:  { "message": string , "session_id": string}
   Response: { "text": string, "chart_data": object | null, "map_data": object | null }
 
 This endpoint calls the agent (agent/ folder) and formats its output for the frontend.

@@ -26,3 +26,10 @@ User: "Is the Arabian Sea getting unusually warm?"
 4. check_significance(anomaly, std_dev)
 5. get_spatial_pattern("Arabian Sea", radius)
 6. generate_explanation(all results) → returned as final text response
+
+## Conversation Memory
+Agent receives recent conversation history (last 3-4 turns) alongside the
+current message, passed via session_id from the backend. Use this to resolve
+follow-up questions (e.g. "now show me last year" referring to the region/
+parameter established in a prior turn). Do not require the full history —
+only the last few exchanges are needed to maintain context.
