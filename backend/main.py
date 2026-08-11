@@ -1,3 +1,8 @@
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", "agent"))
+from agent import run_agent
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -5,10 +10,9 @@ from typing import Optional
 
 app = FastAPI()
 
-# Allow frontend (running on a different port) to call this backend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten this before deployment
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -28,9 +32,8 @@ def health():
 
 @app.post("/chat", response_model=ChatResponse)
 def chat(request: ChatRequest):
-    # Mock response for now — Step 4 will replace this with a real agent call
-    return ChatResponse(
-        text=f"[MOCK] You asked: '{request.message}'. Real agent reasoning coming in Step 4.",
-        chart_data=None,
-        map_data=None,
-    )
+    try:
+        result = run_agent(request.message)
+        return ChatResponse(**result)
+    except Exception as e:
+        return ChatResponse(text=f"Something went wrong: {str(e)}")
