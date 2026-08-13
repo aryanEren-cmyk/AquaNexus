@@ -1,4 +1,11 @@
 import random
+from profile_analysis import (
+    calculate_profile_statistics as analyze_profile_statistics,
+    calculate_temperature_gradient as analyze_temperature_gradient,
+    detect_thermocline as analyze_thermocline,
+    get_profile as load_profile,
+    get_temperature_at_depth as analyze_temperature_at_depth,
+)
 
 def get_current_data(region: str, parameter: str, time_range: str) -> dict:
     """Get recent measurements for a region/parameter. MOCK DATA for now."""
@@ -53,3 +60,27 @@ def get_spatial_pattern(region: str, radius: str = "nearby") -> dict:
             for r in nearby_regions
         ],
     }
+
+def get_profile(profile_id: str) -> dict:
+    """Return one complete synthetic/test ocean profile."""
+    return load_profile(profile_id).to_dict()
+
+def get_temperature_at_depth(profile_id: str, target_depth: float) -> dict:
+    """Return deterministic profile temperature at depth using interpolation."""
+    profile = load_profile(profile_id)
+    return analyze_temperature_at_depth(profile, target_depth)
+
+def calculate_temperature_gradient(profile_id: str) -> dict:
+    """Return segment-by-segment deterministic temperature gradients."""
+    profile = load_profile(profile_id)
+    return analyze_temperature_gradient(profile)
+
+def calculate_profile_statistics(profile_id: str) -> dict:
+    """Return deterministic summary statistics for a synthetic/test profile."""
+    profile = load_profile(profile_id)
+    return analyze_profile_statistics(profile)
+
+def detect_thermocline(profile_id: str) -> dict:
+    """Detect strongest gradient zone with a simplified heuristic."""
+    profile = load_profile(profile_id)
+    return analyze_thermocline(profile)

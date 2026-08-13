@@ -1,18 +1,19 @@
-import os
 import json
-from dotenv import load_dotenv
-from groq import Groq
+
+from config import get_chat_provider, get_llm_config
 from tools import (
+    calculate_anomaly,
+    calculate_profile_statistics,
+    calculate_temperature_gradient,
+    check_significance,
+    detect_thermocline,
     get_current_data,
     get_historical_baseline,
-    calculate_anomaly,
-    check_significance,
+    get_profile,
     get_spatial_pattern,
+    get_temperature_at_depth,
 )
 
-load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
-
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 TOOLS_MAP = {
     "get_current_data": get_current_data,
@@ -20,6 +21,11 @@ TOOLS_MAP = {
     "calculate_anomaly": calculate_anomaly,
     "check_significance": check_significance,
     "get_spatial_pattern": get_spatial_pattern,
+    "get_profile": get_profile,
+    "get_temperature_at_depth": get_temperature_at_depth,
+    "calculate_temperature_gradient": calculate_temperature_gradient,
+    "calculate_profile_statistics": calculate_profile_statistics,
+    "detect_thermocline": detect_thermocline,
 }
 
 TOOL_SCHEMAS = [
@@ -74,7 +80,7 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "check_significance",
-            "description": "Check if an anomaly is significant using a threshold heuristic (not a formal statistical test)",
+            "description": "Check if an anomaly is significant using a threshold heuristic",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -100,6 +106,77 @@ TOOL_SCHEMAS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_profile",
+            "description": "Get one complete synthetic/test ocean profile by ID",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "profile_id": {"type": "string"},
+                },
+                "required": ["profile_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_temperature_at_depth",
+            "description": "Get deterministic temperature at a requested depth for a synthetic/test profile",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "profile_id": {"type": "string"},
+                    "target_depth": {"type": "number"},
+                },
+                "required": ["profile_id", "target_depth"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "calculate_temperature_gradient",
+            "description": "Calculate segment-by-segment temperature gradients for a synthetic/test profile",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "profile_id": {"type": "string"},
+                },
+                "required": ["profile_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "calculate_profile_statistics",
+            "description": "Calculate deterministic summary statistics for a synthetic/test profile",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "profile_id": {"type": "string"},
+                },
+                "required": ["profile_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "detect_thermocline",
+            "description": "Detect the strongest temperature-gradient zone using a simplified heuristic",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "profile_id": {"type": "string"},
+                },
+                "required": ["profile_id"],
+            },
+        },
+    },
 ]
 
 SYSTEM_PROMPT = (
@@ -108,24 +185,32 @@ SYSTEM_PROMPT = (
     "compare to historical baseline, calculate anomaly, check significance, "
     "and look at spatial patterns if useful. Then explain your findings "
     "clearly in plain language. Never claim this is a formal statistical "
-    "significance test — call it a threshold-based heuristic. "
+    "significance test; call it a threshold-based heuristic. "
     "IMPORTANT: Respond in plain conversational text only. Do NOT use "
-    "Markdown formatting — no asterisks, no bold, no headers (###), "
-    "no bullet points, no horizontal rules (---). Write as if speaking "
-    "naturally, using plain sentences and paragraphs."
+    "Markdown formatting: no asterisks, no bold, no headers, no bullet "
+    "points, and no horizontal rules. Write as if speaking naturally, "
+    "using plain sentences and paragraphs."
 )
 
-def run_agent(message: str, history: list = None) -> dict:
+
+def _format_response(text: str) -> dict:
+    return {
+        "text": text,
+        "chart_data": None,
+        "map_data": None,
+    }
+
+
+def run_agent(message: str, history: list = None, chat_provider=None) -> dict:
+    config = get_llm_config()
+    provider = chat_provider or get_chat_provider(config)
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     messages.append({"role": "user", "content": message})
 
-    # Agent loop — keep calling tools until the model gives a final text answer
-    for _ in range(8):  # safety limit on loop iterations
-        response = client.chat.completions.create(
-            model="openai/gpt-oss-120b",
+    for _ in range(config.max_tool_calls):
+        response = provider.create_completion(
             messages=messages,
             tools=TOOL_SCHEMAS,
-            tool_choice="auto",
         )
 
         choice = response.choices[0].message
@@ -136,16 +221,14 @@ def run_agent(message: str, history: list = None) -> dict:
                 fn_name = tool_call.function.name
                 fn_args = json.loads(tool_call.function.arguments)
                 result = TOOLS_MAP[fn_name](**fn_args)
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "content": json.dumps(result),
-                })
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": json.dumps(result),
+                    }
+                )
         else:
-            return {
-                "text": choice.content,
-                "chart_data": None,
-                "map_data": None,
-            }
+            return _format_response(choice.content)
 
-    return {"text": "I wasn't able to complete the analysis. Please try again.", "chart_data": None, "map_data": None}
+    return _format_response("I wasn't able to complete the analysis. Please try again.")
